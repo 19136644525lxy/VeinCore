@@ -30,6 +30,8 @@ import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.io.IOException;
@@ -55,6 +57,10 @@ public final class VeinCoreService {
 
     private static final String PLAYERS_FILE = "veincore-players.json";
     private static final long SAVE_INTERVAL_TICKS = 100;
+    /** 预览渲染最多发送的方块数（客户端再按自己的 preview_render_cap 截断）。 */
+    private static final int PREVIEW_RENDER_CAP = 256;
+    /** 预览只发送距离玩家 64 格内的方块。 */
+    private static final double PREVIEW_MAX_DISTANCE_SQR = 64.0 * 64.0;
 
     private final FabricPlatform platform;
     private final IProtectionProbe protection = new FabricProtectionProbe();
@@ -219,6 +225,64 @@ public final class VeinCoreService {
         }
     }
 
+    /** 当前按住热键的玩家 ID 快照（tick 推送预览用）。 */
+    public Set<UUID> pressedIds() {
+        return Set.copyOf(pressed);
+    }
+
+    /**
+     * 预览扫描（M4）：不破坏方块，返回模式 / 状态 / 预计格数 / 剩余冷却 / 渲染用方块子集。
+     */
+    public PreviewResult preview(ServerPlayer player) {
+        UUID id = player.getUUID();
+        String patternKey = patterns.getOrDefault(id, PatternId.byKey(config.defaultPattern) == null
+                ? PatternId.VEIN : PatternId.byKey(config.defaultPattern)).key;
+        if (!authorized(player)) {
+            return new PreviewResult(patternKey, "unauthorized", 0, 0, List.of());
+        }
+        if (!pressed.contains(id)) {
+            return new PreviewResult(patternKey, "idle", 0, 0, List.of());
+        }
+        Cooldown cooldown = cooldowns.get(id);
+        if (cooldown != null) {
+            int remaining = cooldown.remaining(platform.serverTick());
+            if (remaining > 0) {
+                return new PreviewResult(patternKey, "cooldown", 0, remaining, List.of());
+            }
+        }
+        HitResult hit = player.pick(5.0, 1.0f, false);
+        if (!(hit instanceof BlockHitResult blockHit)) {
+            return new PreviewResult(patternKey, "no_target", 0, 0, List.of());
+        }
+        ServerLevel level = player.serverLevel();
+        BlockPos origin = blockHit.getBlockPos();
+        BlockState originState = level.getBlockState(origin);
+        if (originState.isAir()) {
+            return new PreviewResult(patternKey, "no_target", 0, 0, List.of());
+        }
+        Vec3 look = player.getViewVector(1.0f);
+        PatternContext ctx = new PatternContext(pos(origin), faceFor(look),
+                ViewAxis.fromLook(look.x, look.y, look.z), maxBlocksFor(id),
+                canMine(player, level), sameGroup(level, blockId(originState)));
+        BreakPlan plan = engine.plan(patternKey, ctx);
+        List<Pos> render = new ArrayList<>();
+        int cap = Math.min(PREVIEW_RENDER_CAP, plan.blocks().size());
+        Vec3 eye = player.position();
+        for (Pos p : plan.blocks()) {
+            if (render.size() >= cap) {
+                break;
+            }
+            double dx = p.x() + 0.5 - eye.x;
+            double dy = p.y() + 0.5 - eye.y;
+            double dz = p.z() + 0.5 - eye.z;
+            if (dx * dx + dy * dy + dz * dz <= PREVIEW_MAX_DISTANCE_SQR) {
+                render.add(p);
+            }
+        }
+        String status = plan.over600() ? "over600" : "ready";
+        return new PreviewResult(patternKey, status, plan.size(), 0, List.copyOf(render));
+    }
+
     /** 返回 true = 放行原破坏；false = 连锁接管（原方块也由本类破坏）。 */
     public boolean handleBreak(PlayerHandle handle, Pos pos) {
         UUID id = UUID.fromString(handle.id());
@@ -246,26 +310,9 @@ public final class VeinCoreService {
         ViewAxis axis = ViewAxis.fromLook(look.x, look.y, look.z);
         Face face = faceFor(look);
         String originBlock = blockId(originState);
-        Predicate<Pos> canMine = p -> {
-            BlockPos bp = blockPos(p);
-            BlockState st = level.getBlockState(bp);
-            if (st.isAir() || !st.getFluidState().isEmpty()) {
-                return false;
-            }
-            if (st.getDestroySpeed(level, bp) < 0) {
-                return false;
-            }
-            String bid = blockId(st);
-            if (config.blacklist.contains(bid)) {
-                return false;
-            }
-            if (!config.whitelist.isEmpty() && !config.whitelist.contains(bid)) {
-                return false;
-            }
-            return protection.canBreak(handle, p);
-        };
+        Predicate<Pos> canMine = canMine(player, level);
         // 同组方块（如 iron_ore 与 deepslate_iron_ore）也视为可连锁
-        Predicate<Pos> sameGroup = p -> groups.sameGroup(originBlock, blockId(level.getBlockState(blockPos(p))));
+        Predicate<Pos> sameGroup = sameGroup(level, originBlock);
         int limit = maxBlocksFor(id);
         PatternContext ctx = new PatternContext(pos, face, axis, limit, canMine, sameGroup);
         PatternId selected = patterns.get(id);
@@ -326,6 +373,38 @@ public final class VeinCoreService {
 
     private static BlockPos blockPos(Pos p) {
         return new BlockPos(p.x(), p.y(), p.z());
+    }
+
+    private static Pos pos(BlockPos p) {
+        return new Pos(p.getX(), p.getY(), p.getZ());
+    }
+
+    /** 可连锁判定：非空气/流体、可破坏、黑白名单、保护探测。 */
+    private Predicate<Pos> canMine(ServerPlayer player, ServerLevel level) {
+        PlayerHandle handle = new PlayerHandle(player.getUUID().toString());
+        return p -> {
+            BlockPos bp = blockPos(p);
+            BlockState st = level.getBlockState(bp);
+            if (st.isAir() || !st.getFluidState().isEmpty()) {
+                return false;
+            }
+            if (st.getDestroySpeed(level, bp) < 0) {
+                return false;
+            }
+            String bid = blockId(st);
+            if (config.blacklist.contains(bid)) {
+                return false;
+            }
+            if (!config.whitelist.isEmpty() && !config.whitelist.contains(bid)) {
+                return false;
+            }
+            return protection.canBreak(handle, p);
+        };
+    }
+
+    /** 同组判定（矿脉模式用）：挖 origin 方块时，关联它的矿石组（含深板岩变种）。 */
+    private Predicate<Pos> sameGroup(ServerLevel level, String originBlock) {
+        return p -> groups.sameGroup(originBlock, blockId(level.getBlockState(blockPos(p))));
     }
 
     private static String blockId(BlockState state) {

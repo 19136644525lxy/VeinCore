@@ -22,4 +22,10 @@ public final class Cooldown {
     public int ticks() {
         return ticks;
     }
+
+    /** 剩余冷却 tick（0 = 可用）。只读，不更新 lastTick。 */
+    public int remaining(long nowTick) {
+        long left = (long) ticks - (nowTick - lastTick);
+        return (int) Math.max(0, Math.min(Integer.MAX_VALUE, left));
+    }
 }

@@ -328,9 +328,9 @@ fabric|forge/
 | M1 核心引擎 | BFS/模式/限流/64–1280 上限/600 警告/预览扫描 | 单元测试通过；单机 1280 格连锁可用 | 2–3 周 |
 | M2 两端事件 + 权限 | 破坏拦截/取消/保护探测 + 收紧后的 AccessManager/命令 + Shift+热键+滚轮模式切换 | 未授权不触发；玩家不能 allow；owner 不可取消；滚轮切换模式生效 | 2 周（✅ 两端已实现） |
 | M3 配置/命令/数据包 | ✅ 已完成：全套命令（allow/deny/list/status/settings/settings maxblocks/mode/stats/groups/groups <name>/reload）、access 持久化、个人上限/模式/统计落盘（veincore-players.json）、default_player_blocks、数据包方块组覆盖、热重载 | 重启不丢配置；datapack 生效；reload 生效 | 1–2 周 |
-| **M4 客户端基础** | 热键、**轮廓渲染**、HUD 骨架、状态同步 | 轮廓正确显示/清理；1280 格 FPS 可接受 | 1–2 周 |
-| **M5 指示器完善** | **GUI/文本双模式**、图标、锚点偏移、资源包覆盖、性能调优 | 两种模式可切换且显示正确 | 1–2 周 |
-| M6 测试/文档/发布 | GameTest + 性能矩阵 + README/Wiki | 验收清单全绿 | 2 周 |
+| **M4 客户端基础** | 热键、**轮廓渲染**、HUD 骨架、状态同步 | 轮廓正确显示/清理；1280 格 FPS 可接受 | 1–2 周 | ✅ 已完成：Fabric 走服务端 S2C 预览 + HUD/轮廓，Forge 走客户端本地预览 + HUD（Mixin 注入 `Gui#render`，Forge 1.20.5+ 无 HUD 事件）+ 轮廓；两端构建通过 |
+| **M5 指示器完善** | **GUI/文本双模式**、图标、锚点偏移、资源包覆盖、性能调优 | 两种模式可切换且显示正确 | 1–2 周 | ✅ 已完成：GUI 面板/文本双模式、8 张模式图标、`/veinminer indicator mode/on/off/outline/offset`、资源包可覆盖图标、渲染上限 + 64 格距离裁剪 |
+| M6 测试/文档/发布 | GameTest + 性能矩阵 + README/Wiki | 验收清单全绿 | 2 周 | ⏳ 待开始（首轮实机测试由用户统一进行） |
 
 **合计约 10–14 周**（v0.1 MVP 可在 M3 后先行发布）。
 

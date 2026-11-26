@@ -53,6 +53,7 @@ public final class VeinCoreForgeClient {
                 return;
             }
             boolean pressed = triggerKey.isDown();
+            ForgePreview.tick(pressed);
             if (pressed != lastPressed) {
                 ForgeNetwork.sendKeyState(pressed);
                 lastPressed = pressed;
@@ -78,6 +79,7 @@ public final class VeinCoreForgeClient {
         }
         patternIndex = Math.floorMod(patternIndex + (offsetY > 0 ? 1 : -1), PATTERNS.length);
         PatternId pattern = PATTERNS[patternIndex];
+        ForgePreview.setPattern(pattern.key);
         ForgeNetwork.sendPattern(pattern.key);
         client.player.displayClientMessage(Component.literal("VeinCore 模式: " + pattern.key), true);
         return true;

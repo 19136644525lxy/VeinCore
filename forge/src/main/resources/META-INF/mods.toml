@@ -21,3 +21,6 @@ mandatory=true
 versionRange="[1.21.1]"
 ordering="NONE"
 side="BOTH"
+
+[[mixins]]
+config="veincore.mixins.json"
