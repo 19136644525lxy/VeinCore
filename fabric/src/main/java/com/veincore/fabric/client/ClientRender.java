@@ -67,7 +67,11 @@ public final class ClientRender {
         int panelWidth = iconSize + 6 + textWidth + 6;
         int panelHeight = Math.max(iconSize, 20) + 4;
         graphics.fill(x - 2, y - 2, x + panelWidth, y + panelHeight, 0x99000000);
-        graphics.blit(icon(p.pattern()), x + 2, y + 2, 0f, 0f, iconSize, iconSize, 16, 16);
+        int[] src = iconSize(p.pattern());
+        int drawW = iconSize;
+        int drawH = Math.max(1, Math.round(iconSize * (float) src[1] / (float) src[0]));
+        int drawY = y + 2 + Math.max(0, (panelHeight - 4 - drawH) / 2);
+        graphics.blit(icon(p.pattern()), x + 2, drawY, 0f, 0f, drawW, drawH, src[0], src[1]);
         int textX = x + iconSize + 6;
         graphics.drawString(mc.font, Component.literal(top), textX, y + 2, 0xFFFFFF, true);
         graphics.drawString(mc.font, Component.literal(bottom), textX, y + 11, statusColor, true);
@@ -144,9 +148,25 @@ public final class ClientRender {
         };
     }
 
+    /** 各 pattern_id 原始 PNG 尺寸（与 NOTICE 映射一致，未改像素）。 */
+    private static final java.util.Map<String, int[]> ICON_SIZES = java.util.Map.of(
+            "vein", new int[]{17, 15},
+            "chain", new int[]{15, 15},
+            "square_3x3", new int[]{13, 13},
+            "tunnel_1x1", new int[]{13, 13},
+            "tunnel_3x3", new int[]{17, 17},
+            "diagonal", new int[]{15, 15},
+            "plane", new int[]{17, 12},
+            "unknown", new int[]{12, 17});
+
     /** 图标资源：assets/veincore/textures/pattern_icon/<pattern>.png，缺失回退 unknown。 */
     public static ResourceLocation icon(String pattern) {
         String key = PatternId.byKey(pattern) == null ? "unknown" : PatternId.byKey(pattern).key;
         return ResourceLocation.fromNamespaceAndPath("veincore", "textures/pattern_icon/" + key + ".png");
+    }
+
+    private static int[] iconSize(String pattern) {
+        PatternId id = PatternId.byKey(pattern);
+        return ICON_SIZES.getOrDefault(id == null ? "unknown" : id.key, new int[]{16, 16});
     }
 }

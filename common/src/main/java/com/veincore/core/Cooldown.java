@@ -12,6 +12,11 @@ public final class Cooldown {
 
     /** @return 冷却是够结束（现在可以触发） */
     public boolean ready(long nowTick) {
+        // lastTick 用 Long.MIN_VALUE 表示“从未触发”，必须先特判，否则 nowTick - Long.MIN_VALUE 会溢出成负数。
+        if (lastTick == Long.MIN_VALUE) {
+            lastTick = nowTick;
+            return true;
+        }
         if (nowTick - lastTick >= ticks) {
             lastTick = nowTick;
             return true;
@@ -25,6 +30,9 @@ public final class Cooldown {
 
     /** 剩余冷却 tick（0 = 可用）。只读，不更新 lastTick。 */
     public int remaining(long nowTick) {
+        if (lastTick == Long.MIN_VALUE) {
+            return 0;
+        }
         long left = (long) ticks - (nowTick - lastTick);
         return (int) Math.max(0, Math.min(Integer.MAX_VALUE, left));
     }
