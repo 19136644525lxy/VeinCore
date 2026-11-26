@@ -3,6 +3,10 @@ plugins {
     id 'net.minecraftforge.gradle' version '[6.0,6.2)'
 }
 
+minecraft {
+    mappings channel: 'official', version: minecraft_version
+}
+
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
     implementation project(':common')
@@ -10,4 +14,9 @@ dependencies {
 
 base {
     archivesName = 'veincore-forge'
+}
+
+// 收尾：把 common 的核心类打进同一 jar（common 无 MC 依赖）；懒加载避免配置期交叉配置
+jar {
+    from(project(':common').tasks.named('jar').map { zipTree(it.archiveFile) })
 }

@@ -1,6 +1,6 @@
-// Fabric 1.21.1 适配模块（M0 骨架，需 Gradle 8.x + Loom 1.8）
+// Fabric 1.21.1 适配模块（M0 骨架，需 Gradle 8.x + Loom 1.9）
 plugins {
-    id 'fabric-loom' version '1.8-SNAPSHOT'
+    id 'fabric-loom' version '1.9.2'
 }
 
 dependencies {
@@ -13,4 +13,9 @@ dependencies {
 
 base {
     archivesName = 'veincore-fabric'
+}
+
+// 收尾：把 common 的核心类打进同一 jar（common 无 MC 依赖，remap 对其无影响）；懒加载避免配置期交叉配置
+jar {
+    from(project(':common').tasks.named('jar').map { zipTree(it.archiveFile) })
 }

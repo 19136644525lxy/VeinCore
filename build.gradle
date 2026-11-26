@@ -6,7 +6,8 @@ allprojects {
     repositories {
         mavenCentral()
         maven { url = 'https://maven.fabricmc.net/' }
-        maven { url = 'https://files.minecraftforge.net/maven/' }
+        maven { url = 'https://maven.minecraftforge.net/' }
+        maven { url = 'https://libraries.minecraft.net/' }
     }
 }
 
@@ -14,15 +15,16 @@ subprojects {
     if (project.name == 'common') {
         apply plugin: 'java-library'
     }
-    afterEvaluate { p ->
-        if (p.plugins.hasPlugin('java')) {
-            p.java {
-                toolchain { languageVersion = JavaLanguageVersion.of(21) }
+    // 在 Java 插件应用时立即设置工具链，避免 afterEvaluate 阶段 toolchain 已 final 的冲突
+    plugins.withId('java') {
+        java {
+            toolchain {
+                languageVersion = JavaLanguageVersion.of(21)
             }
-            p.tasks.withType(JavaCompile).configureEach {
-                options.encoding = 'UTF-8'
-                options.release = 21
-            }
+        }
+        tasks.withType(JavaCompile).configureEach {
+            options.encoding = 'UTF-8'
+            options.release = 21
         }
     }
 }
