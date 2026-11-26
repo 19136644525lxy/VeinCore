@@ -1,0 +1,11 @@
+{
+  "required": true,
+  "package": "com.veincore.fabric.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "MouseScrollMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

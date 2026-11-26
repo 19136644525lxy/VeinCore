@@ -146,6 +146,8 @@ fabric|forge/
 | `plane` | 平面 | 以触发方块所在高度的水平面扩展（同层）。 |
 | — | 回退 | 无对应 `pattern_id` 时使用 `unknown.png`。 |
 
+**模式切换交互（FTB Ultimine 同款）**：按住热键（默认 `~`）+ Shift + 鼠标滚轮上下，循环切换 7 种模式；客户端即时生效，并通过 `PatternSelectPayload` 同步服务端按玩家记录。切换期间滚轮被拦截，不会误切物品栏。
+
 **参考分析**：FTB Ultimine Indicator 在按下连锁键（默认 `~`）后于**十字准星右侧**显示当前形状的**名称 + 图标 + 连锁状态**，替代原版纯文本菜单；支持资源包覆盖图标；配置项有 `enable/show_shape_name/show_status/toggle/show_plain_text_menu/require_sneak_for_menu`；仅 1.20.1 已停更。
 
 **双模式设计**
@@ -324,7 +326,7 @@ fabric|forge/
 |---|---|---|---|
 | M0 脚手架 | 两端空 mod 可加载；common remap 跑通；HUD/渲染事件实测；CI | 两端 `runClient` 无报错；`dependencies` 无 Architectury | 1–2 周 |
 | M1 核心引擎 | BFS/模式/限流/64–1280 上限/600 警告/预览扫描 | 单元测试通过；单机 1280 格连锁可用 | 2–3 周 |
-| M2 两端事件 + 权限 | 破坏拦截/取消/保护探测 + 收紧后的 AccessManager/命令 | 未授权不触发；玩家不能 allow；owner 不可取消 | 2 周 |
+| M2 两端事件 + 权限 | 破坏拦截/取消/保护探测 + 收紧后的 AccessManager/命令 + Shift+热键+滚轮模式切换 | 未授权不触发；玩家不能 allow；owner 不可取消；滚轮切换模式生效 | 2 周（✅ 两端已实现） |
 | M3 配置/命令/数据包 | 全套命令、access 持久化、server_max_blocks、数据包覆盖 | 重启不丢配置；datapack 生效；reload 生效 | 1–2 周 |
 | **M4 客户端基础** | 热键、**轮廓渲染**、HUD 骨架、状态同步 | 轮廓正确显示/清理；1280 格 FPS 可接受 | 1–2 周 |
 | **M5 指示器完善** | **GUI/文本双模式**、图标、锚点偏移、资源包覆盖、性能调优 | 两种模式可切换且显示正确 | 1–2 周 |

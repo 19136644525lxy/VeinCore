@@ -1,7 +1,10 @@
 package com.veincore.fabric;
 
+import com.mojang.authlib.GameProfile;
+import com.veincore.auth.AccessManager;
 import com.veincore.config.JsonStore;
 import com.veincore.config.ServerConfig;
+import com.veincore.core.BlockGroupIndex;
 import com.veincore.core.BreakPlan;
 import com.veincore.core.Cooldown;
 import com.veincore.core.Face;
@@ -9,17 +12,21 @@ import com.veincore.core.MiningEngine;
 import com.veincore.core.Pos;
 import com.veincore.core.ViewAxis;
 import com.veincore.core.pattern.PatternContext;
+import com.veincore.core.pattern.PatternId;
 import com.veincore.platform.IEventRegistrar;
 import com.veincore.platform.IProtectionProbe;
 import com.veincore.platform.PlayerHandle;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.Set;
@@ -28,23 +35,26 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 
 /**
- * 服务端连锁核心（M1）：热键状态 → 破坏事件 → 模式扫描 → 接管破坏。
- *
- * <p>M1 范围：单机/局域网可用；权限（M2）、预览/指示器（M4）未接入。</p>
+ * 服务端连锁核心（M2）：热键状态 → 权限校验 → 破坏事件 → 按玩家模式扫描 → 耐久/饱食度 → 接管破坏。
  */
 public final class VeinCoreService {
 
     private final FabricPlatform platform;
     private final ServerConfig config;
     private final MiningEngine engine;
+    private final AccessManager access;
+    private final BlockGroupIndex groups;
     private final IProtectionProbe protection = new FabricProtectionProbe();
     private final Set<UUID> pressed = ConcurrentHashMap.newKeySet();
     private final Map<UUID, Cooldown> cooldowns = new ConcurrentHashMap<>();
+    private final Map<UUID, PatternId> patterns = new ConcurrentHashMap<>();
 
     public VeinCoreService(FabricPlatform platform) {
         this.platform = platform;
         this.config = loadConfig(platform.configDir());
         this.engine = new MiningEngine(config);
+        this.access = loadAccess(platform.configDir());
+        this.groups = BlockGroupIndex.from(config.blockGroups);
     }
 
     /** 注册到平台事件。 */
@@ -60,15 +70,53 @@ public final class VeinCoreService {
         }
     }
 
+    /** 记录玩家当前选择的模式；未知 key 回退服务端默认。 */
+    public void setPattern(UUID id, String key) {
+        PatternId p = PatternId.byKey(key);
+        if (p == null) {
+            patterns.remove(id);
+        } else {
+            patterns.put(id, p);
+        }
+    }
+
     public boolean isPressed(UUID id) {
         return pressed.contains(id);
     }
 
-    /** 玩家离开：清理热键与冷却状态。 */
+    /** 玩家离开：清理热键、冷却与模式状态。 */
     public void forget(PlayerHandle handle) {
         UUID id = UUID.fromString(handle.id());
         pressed.remove(id);
         cooldowns.remove(id);
+        patterns.remove(id);
+    }
+
+    /** owner = 单机/局域网主机，或 OP 等级 ≥ 4。控制台在命令层处理。 */
+    public boolean isOwner(ServerPlayer player) {
+        MinecraftServer server = platform.server();
+        GameProfile host = server.getSingleplayerProfile();
+        if (host != null && host.getId() != null && host.getId().equals(player.getUUID())) {
+            return true;
+        }
+        return player.hasPermissions(4);
+    }
+
+    public boolean isAllowed(UUID id) {
+        return access.isAllowed(id.toString());
+    }
+
+    public AccessManager access() {
+        return access;
+    }
+
+    /** 权限变更后写回 access 文件；写失败不阻断命令。 */
+    public void saveAccess() {
+        try {
+            JsonStore.save(platform.configDir().resolve("veincore-access.json"), access.toMap());
+        } catch (IOException ignored) {
+            // 忽略：下次启动仍可重试
+        }
     }
 
     /** 返回 true = 放行原破坏；false = 连锁接管（原方块也由本类破坏）。 */
@@ -79,6 +127,9 @@ public final class VeinCoreService {
         }
         ServerPlayer player = platform.playerById(handle.id());
         if (player == null) {
+            return true;
+        }
+        if (!authorized(player)) {
             return true;
         }
         Cooldown cooldown = cooldowns.computeIfAbsent(id, k -> new Cooldown(config.cooldownTicks));
@@ -109,22 +160,55 @@ public final class VeinCoreService {
             }
             return protection.canBreak(handle, p);
         };
-        Predicate<Pos> sameGroup = p -> blockId(level.getBlockState(blockPos(p))).equals(originBlock);
+        // 同组方块（如 iron_ore 与 deepslate_iron_ore）也视为可连锁
+        Predicate<Pos> sameGroup = p -> groups.sameGroup(originBlock, blockId(level.getBlockState(blockPos(p))));
         PatternContext ctx = new PatternContext(pos, face, axis, config.maxBlocks, canMine, sameGroup);
-        BreakPlan plan = engine.plan(config.defaultPattern, ctx);
+        PatternId selected = patterns.get(id);
+        String patternKey = selected == null ? config.defaultPattern : selected.key;
+        BreakPlan plan = engine.plan(patternKey, ctx);
         if (plan.over600()) {
             player.sendSystemMessage(Component.literal(
                     "VeinCore: 本次连锁 " + plan.size() + " 格（>600），卡顿由你自行承担。"));
         }
+        // 每破坏一格消耗一次耐久（受耐久附魔影响）与可选饱食度；工具损毁即停止连锁
         for (Pos p : plan.blocks()) {
             if (p.equals(pos)) {
                 continue;
             }
+            if (!consumeToolOnce(player)) {
+                break;
+            }
+            if (config.hungerPerBlock > 0) {
+                player.causeFoodExhaustion(config.hungerPerBlock);
+            }
             platform.requestBreak(handle, p);
         }
-        // 原方块由事件取消，这里统一破坏（保持掉落与工具逻辑一致）
-        platform.requestBreak(handle, pos);
+        if (consumeToolOnce(player)) {
+            if (config.hungerPerBlock > 0) {
+                player.causeFoodExhaustion(config.hungerPerBlock);
+            }
+            platform.requestBreak(handle, pos);
+        }
         return false;
+    }
+
+    /** 每破坏一格消耗一次耐久（原版 hurtAndBreak 内含耐久附魔减免）；工具损毁返回 false。 */
+    private boolean consumeToolOnce(ServerPlayer player) {
+        if (player.isCreative()) {
+            return true;
+        }
+        ItemStack stack = player.getMainHandItem();
+        if (stack.isEmpty() || !stack.isDamageableItem()) {
+            return true;
+        }
+        stack.hurtAndBreak(config.durabilityPerBlock, player.serverLevel(), player, item -> {
+        });
+        return !player.getMainHandItem().isEmpty();
+    }
+
+    /** 权限：单机主机、OP≥4、或 access 列表中的玩家。 */
+    private boolean authorized(ServerPlayer player) {
+        return isOwner(player) || access.isAllowed(player.getUUID().toString());
     }
 
     private static BlockPos blockPos(Pos p) {
@@ -152,5 +236,10 @@ public final class VeinCoreService {
         Path file = configDir.resolve("veincore-server.json");
         Map<String, Object> defaults = new ServerConfig().toMap();
         return ServerConfig.fromMap(JsonStore.load(file, defaults));
+    }
+
+    private static AccessManager loadAccess(Path configDir) {
+        Path file = configDir.resolve("veincore-access.json");
+        return AccessManager.fromMap(JsonStore.load(file, new AccessManager().toMap()));
     }
 }

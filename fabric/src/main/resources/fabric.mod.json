@@ -11,6 +11,7 @@
     "main": ["com.veincore.fabric.VeinCoreFabric"],
     "client": ["com.veincore.fabric.client.VeinCoreFabricClient"]
   },
+  "mixins": ["veincore.mixins.json"],
   "depends": {
     "fabricloader": ">=0.16.0",
     "fabric-api": "*",
