@@ -18,14 +18,14 @@ build/
 Thumbs.db
 desktop.ini
 
-# Runtime
-run/
-logs/
+# Runtime (root-level only; do not hide source packages named run/logs/config)
+/run/
+/logs/
 *.log
 
 # Local
 local.properties
-config/
+/config/
 
 # Reference sources (local only, not part of the project)
 temp/
