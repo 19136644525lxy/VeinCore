@@ -1,8 +1,11 @@
 package com.veincore.core;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 方块组索引：同组方块可互相连锁（例如 iron_ore 与 deepslate_iron_ore）。
@@ -51,6 +54,41 @@ public final class BlockGroupIndex {
         }
         String ga = blockToGroup.get(a);
         return ga != null && ga.equals(blockToGroup.get(b));
+    }
+
+    /** 合并额外组定义（数据包覆盖），返回新索引；原索引不变。 */
+    public BlockGroupIndex withOverrides(Map<String, List<String>> extra) {
+        Map<String, String> map = new HashMap<>(blockToGroup);
+        if (extra != null) {
+            for (Map.Entry<String, List<String>> e : extra.entrySet()) {
+                if (e.getKey() == null || e.getValue() == null) {
+                    continue;
+                }
+                for (String block : e.getValue()) {
+                    if (block != null) {
+                        map.put(block, e.getKey());
+                    }
+                }
+            }
+        }
+        return new BlockGroupIndex(map);
+    }
+
+    /** 当前索引中出现的组名。 */
+    public Set<String> groupNames() {
+        return new LinkedHashSet<>(blockToGroup.values());
+    }
+
+    /** 某组下的方块列表（按名字排序）。 */
+    public List<String> members(String group) {
+        List<String> out = new ArrayList<>();
+        for (Map.Entry<String, String> e : blockToGroup.entrySet()) {
+            if (e.getValue() != null && e.getValue().equals(group)) {
+                out.add(e.getKey());
+            }
+        }
+        out.sort(String::compareTo);
+        return out;
     }
 
     private static Map<String, String> buildDefaults() {

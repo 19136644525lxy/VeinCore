@@ -3,7 +3,7 @@
 > 一个为 Minecraft **1.21.1** 设计的两端（Fabric / Forge）连锁破坏模组。
 > 零 Architectury 依赖 · **LGPL-3.0** · 无附魔 · **双模式指示器** · **轮廓预览** · **64–1280 自定义上限**
 
-当前状态：**M2 完成（Fabric + Forge 两端完整）**。两端均已具备：连锁破坏、Shift+滚轮模式切换、权限组（owner/OP/授权名单）、深板岩方块组、**每格消耗 1 点耐久（受耐久附魔影响）**、**每格消耗 20 点疲劳值（默认开启，可配为 0 关闭）**、`/veinminer allow/deny/list/status` 命令。预览与指示器在 M4。
+当前状态：**M3 完成（配置/命令/数据包）**。两端均已具备：连锁破坏、Shift+滚轮模式切换、权限组（owner/OP/授权名单）、深板岩方块组、**每格消耗 1 点耐久（受耐久附魔影响）**、**每格消耗 20 点疲劳值（默认开启，可配为 0 关闭）**、**个人挖掘上限（64–1280，持久化）**、**模式/统计持久化**、**数据包方块组覆盖**、`/veinminer` 全套命令与热重载。预览与指示器在 M4。
 
 ## 为什么做它
 
@@ -34,7 +34,7 @@ VeinCore 的目标：**默认保守不误挖、大矿脉不卡、配置可持久
 4. **自定义挖掘上限**：**64–1280 任意可设**（默认 64）；超过 **600 格**放行但警告「卡顿自负」，服务端可设置封顶。
 5. **7 种模式**：矿脉 / 连锁 / 3×3 小方块 / 隧道 1×1 / 隧道 3×3 / 斜向 / 平面；均可由玩家选（权限可限）。
 6. **独立权限组**：房主 / 服主 / 控制台默认可用且**不可取消**；其他玩家需显式授权；**玩家不能自授权，取消授权也只能由房主/服主/控制台执行**。
-7. **配置持久 + 数据包覆盖**：`config/veinminer/*.json` 原子写入，方块组可由数据包覆盖。
+7. **配置持久 + 数据包覆盖**：`config/veincore-*.json` 原子写入；个人上限/模式/统计落盘；方块组可由数据包 `data/<命名空间>/veinminer/<组名>.json` 覆盖。
 8. **限流与掉落物合并**：每 tick 执行上限、冷却、全局预算，默认合并掉落物，专治卡顿。
 9. **开发者 API**：第三方注册方块组 / 模式 / 回调（KubeJS、CraftTweaker 示例见发布说明）。
 
@@ -54,30 +54,31 @@ VeinCore 的目标：**默认保守不误挖、大矿脉不卡、配置可持久
 - **客户端**：可选。装上后可用指示器与轮廓；不装客户端也不影响连锁。
 - 单人游戏：直接把 jar 放进游戏即可。
 
-## 命令速查（v2.1）
+## 命令速查（M3 实装）
 
 | 命令 | 说明 | 权限 |
 |---|---|---|
 | `/veinminer allow <player>` | 授权玩家 | 仅房主/服主/控制台 |
 | `/veinminer deny <player>` | 取消授权 | 仅房主/服主/控制台 |
-| `/veinminer list` | 查看授权列表 | owner/控制台看全部，玩家只看自己 |
-| `/veinminer status` | 查看自己是否可用 | 所有人 |
-| `/veinminer mode <pattern>` | 切换模式 | 已授权玩家 |
-| `/veinminer settings maxblocks <n>` | 设置自己的挖掘上限（64–1280） | 已授权玩家 |
-| `/veinminer settings <key> <value>` | 调整个人选项 | 已授权玩家 |
-| `/veinminer stats` | 统计信息 | 已授权玩家 |
-| `/veinminer blocks add/remove` | 方块白名单 | 已授权玩家 |
-| `/veinminer groups list` | 内置方块组 | 已授权玩家 |
-| `/veinminer reload` | 重读配置 | 仅房主/服主/控制台 |
-| `/veinminer indicator mode <gui\|text>` | 切换指示器模式 | 客户端本地 |
+| `/veinminer list` | 查看授权列表 | 仅房主/服主/控制台 |
+| `/veinminer status` | 查看自己是否可用 + 当前上限 | 所有人 |
+| `/veinminer settings` | 查看自己的上限构成（个人/封顶/默认） | 已授权玩家 |
+| `/veinminer settings maxblocks <n>` | 设置个人上限（64–1280，超出按服务器封顶） | 已授权玩家 |
+| `/veinminer mode <pattern>` | 切换模式（vein/chain/square_3x3/tunnel_1x1/tunnel_3x3/diagonal/plane） | 已授权玩家 |
+| `/veinminer stats` | 查看连锁次数/累计破坏格数 | 已授权玩家 |
+| `/veinminer groups` | 列出方块组 | 已授权玩家 |
+| `/veinminer groups <name>` | 查看某组成员 | 已授权玩家 |
+| `/veinminer reload` | 重读配置/权限/玩家数据/数据包方块组 | 仅房主/服主/控制台 |
 
-> 注：`mode` / `settings` / `stats` / `blocks` / `groups` / `reload` / `indicator` 属于 M3/M4 功能，当前 M2 构建仅提供 `allow` / `deny` / `list` / `status`。
+> 注：`blocks add/remove`、`indicator` 属于 M4（客户端/白名单扩展），当前未实装。
 
 ## 配置文件
 
-- 服务端：`config/veinminer/veinminer.json`（玩法参数与上限）
-- 服务端：`config/veinminer/access.json`（房主/授权名单）
-- 客户端：`config/veinminer-client.json`（指示器模式/偏移/轮廓开关）
+- 服务端：`config/veincore-server.json`（玩法参数、`max_blocks` 封顶、`default_player_blocks` 默认个人上限、冷却/耐久/饱食度等）
+- 服务端：`config/veincore-access.json`（房主/授权名单）
+- 服务端：`config/veincore-players.json`（每玩家模式、个人上限、统计，自动保存）
+- 客户端：`config/veincore-client.json`（指示器模式/偏移/轮廓开关，M4 启用）
+- 数据包：`data/<命名空间>/veinminer/<组名>.json`，内容 `{"blocks": ["minecraft:...", ...]}`，覆盖/新增方块组
 
 ## 开发进度
 
@@ -86,7 +87,7 @@ VeinCore 的目标：**默认保守不误挖、大矿脉不卡、配置可持久
 | M0 | Fabric+Forge 脚手架 + common remap 验证 | ✅ 完成（javac 自测 50 项通过） |
 | M1 | 核心引擎（BFS/模式/限流/上限/预览扫描） | ✅ 完成（Fabric 事件链路接通：热键包→模式扫描→接管破坏；`javac` 50 项 + `:fabric:build` 通过；预览/指示器归 M4） |
 | M2 | 两端事件 + 权限组/命令 | ✅ 完成（两端：事件/网络/命令/权限组/模式切换/耐久/饱食度；`javac` 50 项 + `:fabric:build` + `:forge:build` 通过） |
-| M3 | 配置/命令/数据包 | ⏳ 待开始 |
+| M3 | 配置/命令/数据包 | ✅ 完成（个人上限/模式/统计持久化、全套命令、数据包方块组覆盖、热重载；`javac` 50 项 + 两端构建通过） |
 | M4 | 客户端基础（热键/轮廓/HUD 骨架） | ⏳ 待开始 |
 | M5 | 指示器完善（GUI/文本双模式） | ⏳ 待开始 |
 | M6 | 测试/文档/发布 | ⏳ 待开始 |

@@ -3,31 +3,42 @@ package com.veincore.fabric;
 import com.mojang.authlib.GameProfile;
 import com.veincore.auth.AccessManager;
 import com.veincore.config.JsonStore;
+import com.veincore.config.MiniJson;
 import com.veincore.config.ServerConfig;
 import com.veincore.core.BlockGroupIndex;
 import com.veincore.core.BreakPlan;
 import com.veincore.core.Cooldown;
 import com.veincore.core.Face;
+import com.veincore.core.MaxBlocksLimiter;
 import com.veincore.core.MiningEngine;
 import com.veincore.core.Pos;
 import com.veincore.core.ViewAxis;
 import com.veincore.core.pattern.PatternContext;
 import com.veincore.core.pattern.PatternId;
+import com.veincore.data.PlayerSettings;
 import com.veincore.platform.IEventRegistrar;
 import com.veincore.platform.IProtectionProbe;
 import com.veincore.platform.PlayerHandle;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.packs.resources.Resource;
+import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -35,25 +46,35 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 
 /**
- * 服务端连锁核心（M2）：热键状态 → 权限校验 → 破坏事件 → 按玩家模式扫描 → 耐久/饱食度 → 接管破坏。
+ * 服务端连锁核心（M3）：热键状态 → 权限校验 → 破坏事件 → 按玩家模式扫描 → 耐久/饱食度 → 接管破坏。
+ *
+ * <p>M3 起：玩家个人上限与模式持久化到 veincore-players.json；数据包可覆盖方块组；
+ * 统计连锁次数与破坏格数；配置支持 /veinminer reload 热重载。</p>
  */
 public final class VeinCoreService {
 
+    private static final String PLAYERS_FILE = "veincore-players.json";
+    private static final long SAVE_INTERVAL_TICKS = 100;
+
     private final FabricPlatform platform;
-    private final ServerConfig config;
-    private final MiningEngine engine;
-    private final AccessManager access;
-    private final BlockGroupIndex groups;
     private final IProtectionProbe protection = new FabricProtectionProbe();
     private final Set<UUID> pressed = ConcurrentHashMap.newKeySet();
     private final Map<UUID, Cooldown> cooldowns = new ConcurrentHashMap<>();
     private final Map<UUID, PatternId> patterns = new ConcurrentHashMap<>();
+
+    private ServerConfig config;
+    private MiningEngine engine;
+    private AccessManager access;
+    private BlockGroupIndex groups;
+    private PlayerSettings players;
+    private long lastSaveTick = -SAVE_INTERVAL_TICKS;
 
     public VeinCoreService(FabricPlatform platform) {
         this.platform = platform;
         this.config = loadConfig(platform.configDir());
         this.engine = new MiningEngine(config);
         this.access = loadAccess(platform.configDir());
+        this.players = PlayerSettings.load(platform.configDir().resolve(PLAYERS_FILE));
         this.groups = BlockGroupIndex.from(config.blockGroups);
     }
 
@@ -70,21 +91,20 @@ public final class VeinCoreService {
         }
     }
 
-    /** 记录玩家当前选择的模式；未知 key 回退服务端默认。 */
+    /** 记录玩家当前选择的模式；未知 key 回退服务端默认。持久化到 players 文件。 */
     public void setPattern(UUID id, String key) {
         PatternId p = PatternId.byKey(key);
         if (p == null) {
             patterns.remove(id);
+            players.setPattern(id.toString(), null);
         } else {
             patterns.put(id, p);
+            players.setPattern(id.toString(), p.key);
         }
+        savePlayers();
     }
 
-    public boolean isPressed(UUID id) {
-        return pressed.contains(id);
-    }
-
-    /** 玩家离开：清理热键、冷却与模式状态。 */
+    /** 玩家离开：清理热键、冷却与内存中的模式状态（个人设置仍保留）。 */
     public void forget(PlayerHandle handle) {
         UUID id = UUID.fromString(handle.id());
         pressed.remove(id);
@@ -110,12 +130,92 @@ public final class VeinCoreService {
         return access;
     }
 
+    public ServerConfig config() {
+        return config;
+    }
+
+    public BlockGroupIndex groups() {
+        return groups;
+    }
+
+    public PlayerSettings playerSettings() {
+        return players;
+    }
+
+    /** 当前生效的挖掘上限：个人设置（缺省为服务器默认）再与服务器封顶夹取。 */
+    public int maxBlocksFor(UUID id) {
+        Integer personal = players.maxBlocks(id.toString());
+        int base = personal == null ? config.defaultPlayerBlocks : personal;
+        return MaxBlocksLimiter.effective(base, config.maxBlocks);
+    }
+
     /** 权限变更后写回 access 文件；写失败不阻断命令。 */
     public void saveAccess() {
         try {
             JsonStore.save(platform.configDir().resolve("veincore-access.json"), access.toMap());
         } catch (IOException ignored) {
             // 忽略：下次启动仍可重试
+        }
+    }
+
+    /** 写回玩家设置与统计；失败不阻断。 */
+    public void savePlayers() {
+        try {
+            players.save(platform.configDir().resolve(PLAYERS_FILE));
+        } catch (IOException ignored) {
+            // 忽略：下次启动仍可重试
+        }
+    }
+
+    /** 节流保存：连锁很密时不频繁写盘。 */
+    private void savePlayersThrottled() {
+        long now = platform.serverTick();
+        if (now - lastSaveTick < SAVE_INTERVAL_TICKS) {
+            return;
+        }
+        lastSaveTick = now;
+        savePlayers();
+    }
+
+    /** 热重载 server/access/players 配置与数据包方块组。 */
+    public void reload(ResourceManager resources) {
+        this.config = loadConfig(platform.configDir());
+        this.engine = new MiningEngine(config);
+        this.access = loadAccess(platform.configDir());
+        this.players = PlayerSettings.load(platform.configDir().resolve(PLAYERS_FILE));
+        this.groups = BlockGroupIndex.from(config.blockGroups);
+        loadDataPack(resources);
+    }
+
+    /** 读取数据包方块组：data/<ns>/veinminer/groups/<组名>.json，内容 {"blocks":[...]}。 */
+    public void loadDataPack(ResourceManager resources) {
+        if (!config.includeDataPack || resources == null) {
+            return;
+        }
+        Map<String, List<String>> extra = new LinkedHashMap<>();
+        try {
+            Map<ResourceLocation, Resource> found = resources.listResources(
+                    "veinminer", id -> id.getPath().endsWith(".json"));
+            for (Map.Entry<ResourceLocation, Resource> e : found.entrySet()) {
+                String path = e.getKey().getPath();
+                String file = path.substring(path.lastIndexOf('/') + 1);
+                String group = file.endsWith(".json") ? file.substring(0, file.length() - 5) : file;
+                try (InputStream in = e.getValue().open()) {
+                    String text = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+                    Object parsed = MiniJson.parse(text);
+                    if (parsed instanceof Map<?, ?> map) {
+                        List<String> blocks = strings(map.get("blocks"));
+                        if (!blocks.isEmpty()) {
+                            extra.put(group, blocks);
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            // 数据包读取失败不影响启动
+        }
+        if (!extra.isEmpty()) {
+            this.groups = groups.withOverrides(extra);
         }
     }
 
@@ -155,14 +255,19 @@ public final class VeinCoreService {
             if (st.getDestroySpeed(level, bp) < 0) {
                 return false;
             }
-            if (config.blacklist.contains(blockId(st))) {
+            String bid = blockId(st);
+            if (config.blacklist.contains(bid)) {
+                return false;
+            }
+            if (!config.whitelist.isEmpty() && !config.whitelist.contains(bid)) {
                 return false;
             }
             return protection.canBreak(handle, p);
         };
         // 同组方块（如 iron_ore 与 deepslate_iron_ore）也视为可连锁
         Predicate<Pos> sameGroup = p -> groups.sameGroup(originBlock, blockId(level.getBlockState(blockPos(p))));
-        PatternContext ctx = new PatternContext(pos, face, axis, config.maxBlocks, canMine, sameGroup);
+        int limit = maxBlocksFor(id);
+        PatternContext ctx = new PatternContext(pos, face, axis, limit, canMine, sameGroup);
         PatternId selected = patterns.get(id);
         String patternKey = selected == null ? config.defaultPattern : selected.key;
         BreakPlan plan = engine.plan(patternKey, ctx);
@@ -173,10 +278,13 @@ public final class VeinCoreService {
         // 先挖玩家点的原方块，再逐格连锁；每挖一格扣一次耐久，工具损毁立即停止。
         // 工具剩余耐久不足以覆盖整个计划时，只挖耐久够的那几格。
         platform.requestBreak(handle, pos);
+        int destroyed = 1;
         if (config.hungerPerBlock > 0) {
             player.causeFoodExhaustion(config.hungerPerBlock);
         }
         if (!consumeToolOnce(player)) {
+            players.recordChain(id.toString(), destroyed);
+            savePlayersThrottled();
             return false;
         }
         for (Pos p : plan.blocks()) {
@@ -184,6 +292,7 @@ public final class VeinCoreService {
                 continue;
             }
             platform.requestBreak(handle, p);
+            destroyed++;
             if (config.hungerPerBlock > 0) {
                 player.causeFoodExhaustion(config.hungerPerBlock);
             }
@@ -191,6 +300,8 @@ public final class VeinCoreService {
                 break;
             }
         }
+        players.recordChain(id.toString(), destroyed);
+        savePlayersThrottled();
         return false;
     }
 
@@ -243,5 +354,17 @@ public final class VeinCoreService {
     private static AccessManager loadAccess(Path configDir) {
         Path file = configDir.resolve("veincore-access.json");
         return AccessManager.fromMap(JsonStore.load(file, new AccessManager().toMap()));
+    }
+
+    private static List<String> strings(Object raw) {
+        List<String> out = new ArrayList<>();
+        if (raw instanceof List<?> list) {
+            for (Object e : list) {
+                if (e instanceof String s) {
+                    out.add(s);
+                }
+            }
+        }
+        return out;
     }
 }

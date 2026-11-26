@@ -36,11 +36,17 @@ public final class ForgeEvents {
 
     @SubscribeEvent
     public static void onServerStarted(ServerStartedEvent event) {
-        VeinCoreForge.setService(new VeinCoreForgeService(new ForgePlatform(event.getServer())));
+        VeinCoreForgeService service = new VeinCoreForgeService(new ForgePlatform(event.getServer()));
+        service.loadDataPack(event.getServer().getResourceManager());
+        VeinCoreForge.setService(service);
     }
 
     @SubscribeEvent
     public static void onServerStopped(ServerStoppedEvent event) {
+        VeinCoreForgeService service = VeinCoreForge.service();
+        if (service != null) {
+            service.savePlayers();
+        }
         VeinCoreForge.setService(null);
     }
 

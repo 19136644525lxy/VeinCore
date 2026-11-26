@@ -13,6 +13,8 @@ public final class ServerConfig {
     public String defaultPattern = "vein";
     /** 服务器封顶，玩家上限不能超过它。 */
     public int maxBlocks = MaxBlocksLimiter.SERVER_FALLBACK;
+    /** 玩家默认挖掘上限（玩家没有 /veinminer settings maxblocks 个人设置时生效）。 */
+    public int defaultPlayerBlocks = MaxBlocksLimiter.MIN;
     public boolean allowOver600 = true;
     /** 每破坏一格增加的疲劳值（exhaustion；4 点 = 1 点饥饿值）。默认 20 = 每格 5 点饥饿值。 */
     public int hungerPerBlock = 20;
@@ -32,6 +34,7 @@ public final class ServerConfig {
         }
         c.defaultPattern = str(map.get("default_pattern"), c.defaultPattern);
         c.maxBlocks = intVal(map.get("max_blocks"), c.maxBlocks);
+        c.defaultPlayerBlocks = intVal(map.get("default_player_blocks"), c.defaultPlayerBlocks);
         c.allowOver600 = boolVal(map.get("allow_over_600"), c.allowOver600);
         c.hungerPerBlock = intVal(map.get("hunger_per_block"), c.hungerPerBlock);
         c.durabilityPerBlock = intVal(map.get("durability_per_block"), c.durabilityPerBlock);
@@ -49,6 +52,7 @@ public final class ServerConfig {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("default_pattern", defaultPattern);
         m.put("max_blocks", maxBlocks);
+        m.put("default_player_blocks", defaultPlayerBlocks);
         m.put("allow_over_600", allowOver600);
         m.put("hunger_per_block", hungerPerBlock);
         m.put("durability_per_block", durabilityPerBlock);
