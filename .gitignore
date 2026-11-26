@@ -29,3 +29,7 @@ local.properties
 
 # Reference sources (local only, not part of the project)
 temp/
+
+# Local design docs / generated previews (not part of the published project)
+/docs/
+
