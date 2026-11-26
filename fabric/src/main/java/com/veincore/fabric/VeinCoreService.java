@@ -8,6 +8,7 @@ import com.veincore.config.ServerConfig;
 import com.veincore.core.BlockGroupIndex;
 import com.veincore.core.BreakPlan;
 import com.veincore.core.Cooldown;
+import com.veincore.core.DropMerger;
 import com.veincore.core.Face;
 import com.veincore.core.MaxBlocksLimiter;
 import com.veincore.core.MiningEngine;
@@ -28,8 +29,11 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.storage.loot.LootParams;
+import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
@@ -324,7 +328,8 @@ public final class VeinCoreService {
         }
         // 先挖玩家点的原方块，再逐格连锁；每挖一格扣一次耐久，工具损毁立即停止。
         // 工具剩余耐久不足以覆盖整个计划时，只挖耐久够的那几格。
-        platform.requestBreak(handle, pos);
+        DropMerger merger = config.mergeItemDrops ? new DropMerger() : null;
+        breakAndCollect(player, origin, merger);
         int destroyed = 1;
         if (config.hungerPerBlock > 0) {
             player.causeFoodExhaustion(config.hungerPerBlock);
@@ -332,13 +337,16 @@ public final class VeinCoreService {
         if (!consumeToolOnce(player)) {
             players.recordChain(id.toString(), destroyed);
             savePlayersThrottled();
+            if (merger != null) {
+                spawnMergedDrops(player, merger);
+            }
             return false;
         }
         for (Pos p : plan.blocks()) {
             if (p.equals(pos)) {
                 continue;
             }
-            platform.requestBreak(handle, p);
+            breakAndCollect(player, blockPos(p), merger);
             destroyed++;
             if (config.hungerPerBlock > 0) {
                 player.causeFoodExhaustion(config.hungerPerBlock);
@@ -349,7 +357,52 @@ public final class VeinCoreService {
         }
         players.recordChain(id.toString(), destroyed);
         savePlayersThrottled();
+        if (merger != null) {
+            spawnMergedDrops(player, merger);
+        }
         return false;
+    }
+
+    /** 破坏一格：合并模式先收集掉落物再破坏，否则按原版掉落。 */
+    private void breakAndCollect(ServerPlayer player, BlockPos bp, DropMerger merger) {
+        ServerLevel level = player.serverLevel();
+        BlockState state = level.getBlockState(bp);
+        if (state.isAir()) {
+            return;
+        }
+        if (merger == null) {
+            platform.requestBreak(new PlayerHandle(player.getUUID().toString()), pos(bp));
+            return;
+        }
+        LootParams.Builder params = new LootParams.Builder(level)
+                .withParameter(LootContextParams.ORIGIN, Vec3.atCenterOf(bp))
+                .withParameter(LootContextParams.TOOL, player.getMainHandItem())
+                .withOptionalParameter(LootContextParams.THIS_ENTITY, player)
+                .withOptionalParameter(LootContextParams.BLOCK_ENTITY, level.getBlockEntity(bp));
+        List<ItemStack> drops = state.getDrops(params);
+        level.destroyBlock(bp, false);
+        for (ItemStack stack : drops) {
+            if (stack.isEmpty()) {
+                continue;
+            }
+            merger.add(pos(bp), BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(), stack.getCount());
+        }
+    }
+
+    /** 把合并后的掉落物按方块位置弹出。 */
+    private void spawnMergedDrops(ServerPlayer player, DropMerger merger) {
+        ServerLevel level = player.serverLevel();
+        for (DropMerger.Entry entry : merger.entries()) {
+            ResourceLocation id = ResourceLocation.tryParse(entry.item());
+            if (id == null || !BuiltInRegistries.ITEM.containsKey(id)) {
+                continue;
+            }
+            ItemStack stack = new ItemStack(BuiltInRegistries.ITEM.get(id), entry.count());
+            ItemEntity entity = new ItemEntity(level,
+                    entry.pos().x() + 0.5, entry.pos().y() + 0.5, entry.pos().z() + 0.5, stack);
+            entity.setDefaultPickUpDelay();
+            level.addFreshEntity(entity);
+        }
     }
 
     /** 每破坏一格消耗一次耐久（原版 hurtAndBreak 内含耐久附魔减免）；工具损毁返回 false。 */
@@ -396,6 +449,10 @@ public final class VeinCoreService {
                 return false;
             }
             if (!config.whitelist.isEmpty() && !config.whitelist.contains(bid)) {
+                return false;
+            }
+            List<String> personal = players.allowBlocks(player.getUUID().toString());
+            if (!personal.isEmpty() && !personal.contains(bid)) {
                 return false;
             }
             return protection.canBreak(handle, p);

@@ -22,6 +22,8 @@ public final class VeinCoreForgeClient {
     private static final PatternId[] PATTERNS = PatternId.values();
     private static KeyMapping triggerKey;
     private static boolean lastPressed;
+    private static boolean lastDown;
+    private static boolean toggleActive;
     private static int patternIndex;
 
     private VeinCoreForgeClient() {
@@ -50,14 +52,27 @@ public final class VeinCoreForgeClient {
             Minecraft client = Minecraft.getInstance();
             if (client.player == null || triggerKey == null) {
                 lastPressed = false;
+                lastDown = false;
+                toggleActive = false;
                 return;
             }
-            boolean pressed = triggerKey.isDown();
-            ForgePreview.tick(pressed);
-            if (pressed != lastPressed) {
-                ForgeNetwork.sendKeyState(pressed);
-                lastPressed = pressed;
+            boolean down = triggerKey.isDown();
+            boolean active;
+            if (ForgeClientConfig.get().toggleMode) {
+                // 切换式：按一下切换“连锁开启/关闭”。
+                if (down && !lastDown) {
+                    toggleActive = !toggleActive;
+                }
+                active = toggleActive;
+            } else {
+                active = down;
             }
+            ForgePreview.tick(active);
+            if (active != lastPressed) {
+                ForgeNetwork.sendKeyState(active);
+                lastPressed = active;
+            }
+            lastDown = down;
         }
 
         @SubscribeEvent

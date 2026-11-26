@@ -9,7 +9,9 @@ import com.veincore.core.pattern.PatternId;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.List;
@@ -49,7 +51,15 @@ public final class FabricCommands {
                         .then(Commands.argument("name", StringArgumentType.word())
                                 .executes(ctx -> groupMembers(ctx.getSource(), StringArgumentType.getString(ctx, "name")))))
                 .then(Commands.literal("reload")
-                        .executes(ctx -> reload(ctx.getSource()))));
+                        .executes(ctx -> reload(ctx.getSource())))
+                .then(Commands.literal("blocks")
+                        .executes(ctx -> blocksList(ctx.getSource()))
+                        .then(Commands.literal("add")
+                                .then(Commands.argument("id", StringArgumentType.greedyString())
+                                        .executes(ctx -> blocksAdd(ctx.getSource(), StringArgumentType.getString(ctx, "id")))))
+                        .then(Commands.literal("remove")
+                                .then(Commands.argument("id", StringArgumentType.greedyString())
+                                        .executes(ctx -> blocksRemove(ctx.getSource(), StringArgumentType.getString(ctx, "id")))))));
     }
 
     private static int allow(CommandSourceStack source, ServerPlayer target) {
@@ -269,9 +279,101 @@ public final class FabricCommands {
         return 1;
     }
 
+    private static int blocksList(CommandSourceStack source) {
+        VeinCoreService service = VeinCoreFabric.service();
+        if (service == null) {
+            return notReady(source);
+        }
+        ServerPlayer caller = playerOrNull(source);
+        if (caller == null) {
+            source.sendFailure(Component.literal("仅玩家可用"));
+            return 0;
+        }
+        if (!authorized(source, service, caller)) {
+            return 0;
+        }
+        List<String> personal = service.playerSettings().allowBlocks(caller.getUUID().toString());
+        if (personal.isEmpty()) {
+            source.sendSuccess(() -> Component.literal("个人白名单未设置：可连锁所有非黑名单方块"), false);
+        } else {
+            source.sendSuccess(() -> Component.literal("个人白名单（" + personal.size() + "）："
+                    + String.join(", ", personal)), false);
+        }
+        return 1;
+    }
+
+    private static int blocksAdd(CommandSourceStack source, String raw) {
+        VeinCoreService service = VeinCoreFabric.service();
+        if (service == null) {
+            return notReady(source);
+        }
+        ServerPlayer caller = playerOrNull(source);
+        if (caller == null) {
+            source.sendFailure(Component.literal("仅玩家可用"));
+            return 0;
+        }
+        if (!authorized(source, service, caller)) {
+            return 0;
+        }
+        String id = normalizeBlock(raw);
+        if (id == null) {
+            source.sendFailure(Component.literal("未知方块：" + raw + "（示例：minecraft:iron_ore）"));
+            return 0;
+        }
+        if (!service.playerSettings().addAllowBlock(caller.getUUID().toString(), id)) {
+            source.sendFailure(Component.literal("该方块已在个人白名单中：" + id));
+            return 0;
+        }
+        service.savePlayers();
+        source.sendSuccess(() -> Component.literal("已加入个人白名单：" + id), false);
+        return 1;
+    }
+
+    private static int blocksRemove(CommandSourceStack source, String raw) {
+        VeinCoreService service = VeinCoreFabric.service();
+        if (service == null) {
+            return notReady(source);
+        }
+        ServerPlayer caller = playerOrNull(source);
+        if (caller == null) {
+            source.sendFailure(Component.literal("仅玩家可用"));
+            return 0;
+        }
+        if (!authorized(source, service, caller)) {
+            return 0;
+        }
+        String id = normalizeBlock(raw);
+        if (id == null) {
+            source.sendFailure(Component.literal("未知方块：" + raw));
+            return 0;
+        }
+        if (!service.playerSettings().removeAllowBlock(caller.getUUID().toString(), id)) {
+            source.sendFailure(Component.literal("该方块不在个人白名单中：" + id));
+            return 0;
+        }
+        service.savePlayers();
+        source.sendSuccess(() -> Component.literal("已从个人白名单移除：" + id), false);
+        return 1;
+    }
+
+    /** 规范化方块 id（小写、补 minecraft: 前缀）并校验注册表；未知返回 null。 */
+    private static String normalizeBlock(String raw) {
+        String id = raw.trim().toLowerCase(java.util.Locale.ROOT);
+        if (id.isEmpty()) {
+            return null;
+        }
+        if (!id.contains(":")) {
+            id = "minecraft:" + id;
+        }
+        ResourceLocation rl = ResourceLocation.tryParse(id);
+        if (rl == null || !BuiltInRegistries.BLOCK.containsKey(rl)) {
+            return null;
+        }
+        return id;
+    }
+
     /** 已授权玩家（owner 或 access 列表）。失败时已发提示并返回 false。 */
-    private static boolean authorized(CommandSourceStack source, VeinCoreService service, ServerPlayer caller) {
-        if (service.isOwner(caller) || service.isAllowed(caller.getUUID())) {
+    private static boolean authorized(CommandSourceStack source, VeinCoreService service, ServerPlayer caller) {        if (service.isOwner(caller) || service.isAllowed(caller.getUUID())) {
             return true;
         }
         source.sendFailure(Component.literal("未授权，无法使用该命令（请房主/服主 /veinminer allow）"));

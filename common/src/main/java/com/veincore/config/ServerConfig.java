@@ -20,6 +20,8 @@ public final class ServerConfig {
     public int hungerPerBlock = 20;
     public int durabilityPerBlock = 1;
     public int cooldownTicks = 10;
+    /** 连锁破坏的掉落物按坐标+物品合并为单个掉落物实体（默认开）。 */
+    public boolean mergeItemDrops = true;
     public int serverMaxRadius = 64;
     public boolean includeDataPack = true;
     public int rescanIntervalTicks = 200;
@@ -39,6 +41,7 @@ public final class ServerConfig {
         c.hungerPerBlock = intVal(map.get("hunger_per_block"), c.hungerPerBlock);
         c.durabilityPerBlock = intVal(map.get("durability_per_block"), c.durabilityPerBlock);
         c.cooldownTicks = intVal(map.get("cooldown_ticks"), c.cooldownTicks);
+        c.mergeItemDrops = boolVal(map.get("merge_item_drops"), c.mergeItemDrops);
         c.serverMaxRadius = intVal(map.get("server_max_radius"), c.serverMaxRadius);
         c.includeDataPack = boolVal(map.get("include_data_pack"), c.includeDataPack);
         c.rescanIntervalTicks = intVal(map.get("rescan_interval_ticks"), c.rescanIntervalTicks);
@@ -57,6 +60,7 @@ public final class ServerConfig {
         m.put("hunger_per_block", hungerPerBlock);
         m.put("durability_per_block", durabilityPerBlock);
         m.put("cooldown_ticks", cooldownTicks);
+        m.put("merge_item_drops", mergeItemDrops);
         m.put("server_max_radius", serverMaxRadius);
         m.put("include_data_pack", includeDataPack);
         m.put("rescan_interval_ticks", rescanIntervalTicks);

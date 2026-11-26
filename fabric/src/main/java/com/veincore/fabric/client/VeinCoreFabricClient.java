@@ -23,6 +23,8 @@ public final class VeinCoreFabricClient implements ClientModInitializer {
     private static final PatternId[] PATTERNS = PatternId.values();
     private static KeyMapping triggerKey;
     private static boolean lastPressed;
+    private static boolean lastDown;
+    private static boolean toggleActive;
     private static int patternIndex;
 
     @Override
@@ -48,13 +50,22 @@ public final class VeinCoreFabricClient implements ClientModInitializer {
             ClientState.tick();
             if (client.player == null) {
                 lastPressed = false;
+                lastDown = false;
+                toggleActive = false;
                 return;
             }
-            boolean pressed = triggerKey.isDown();
-            if (pressed != lastPressed) {
-                ClientPlayNetworking.send(new KeyStatePayload(pressed));
-                lastPressed = pressed;
+            boolean down = triggerKey.isDown();
+            if (ClientConfigStore.get().toggleMode) {
+                // 切换式：按一下热键切换“连锁开启/关闭”，而不是按住。
+                if (down && !lastDown) {
+                    toggleActive = !toggleActive;
+                    ClientPlayNetworking.send(new KeyStatePayload(toggleActive));
+                }
+            } else if (down != lastPressed) {
+                ClientPlayNetworking.send(new KeyStatePayload(down));
+                lastPressed = down;
             }
+            lastDown = down;
         });
     }
 

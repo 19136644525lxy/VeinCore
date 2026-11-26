@@ -127,7 +127,7 @@ fabric|forge/
 ### 3.1 触发（只保留热键）
 
 - 默认热键 `~`（GRAVE），玩家可在按键设置里改；按住热键 + 破坏方块 = 连锁。
-- **按住/切换两种模式**：`indicator.hold_mode: true`（默认按住）；可改为切换式（学参考模组的 `toggle`）。
+- **按住/切换两种模式**：客户端 `veincore-client.json` 的 `toggle_mode: false`（默认按住；改 true 则按一下开关连锁，学参考模组的 `toggle`）。
 - 不判断潜行、不判断附魔、无「常开」模式；配置可整体关闭。
 - 服务端权威：客户端只上报「热键按下状态」，服务端校验权限与方块，防伪造。
 
@@ -163,7 +163,7 @@ fabric|forge/
 
 **显示时机与位置**
 
-- 默认**按住热键时显示**；可改为切换式（`hold_mode=false` 时按一下开/关）。
+- 默认**按住热键时显示**；`toggle_mode=true` 时按一下开、再按关。
 - 布局：`indicator.anchor`（3×3 锚点，默认 CENTER 即准星右侧区域）+ 各元素 `insetX/insetY` 与 `anchorX/anchorY`，全部在 GUI 缩放坐标下计算（详见下方参考实现映射）。
 - 显示内容由服务端状态驱动，客户端只渲染。
 
@@ -268,6 +268,7 @@ fabric|forge/
 | `/veinminer status` | 任何玩家看自己是否可用 |
 | `/veinminer settings maxblocks <n>` | 玩家设自己的上限（64–1280，受服务器封顶） |
 | `/veinminer mode/settings/stats` | 已授权玩家；`reload` 仅 owner/控制台 |
+| `/veinminer blocks add/remove/list <id>` | 个人白名单增删（已授权玩家，只影响自己；非空时只能连锁名单内方块） |
 | `/veinminer indicator mode <gui\|text>` | 本地指示器模式（客户端） |
 
 **删除项**：**取消玩家自助 `optout`**——被取消授权只能由房主/服主/控制台执行，玩家不可自行恢复或取消。
