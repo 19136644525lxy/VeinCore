@@ -170,24 +170,26 @@ public final class VeinCoreService {
             player.sendSystemMessage(Component.literal(
                     "VeinCore: 本次连锁 " + plan.size() + " 格（>600），卡顿由你自行承担。"));
         }
-        // 每破坏一格消耗一次耐久（受耐久附魔影响）与可选饱食度；工具损毁即停止连锁
+        // 先挖玩家点的原方块，再逐格连锁；每挖一格扣一次耐久，工具损毁立即停止。
+        // 工具剩余耐久不足以覆盖整个计划时，只挖耐久够的那几格。
+        platform.requestBreak(handle, pos);
+        if (config.hungerPerBlock > 0) {
+            player.causeFoodExhaustion(config.hungerPerBlock);
+        }
+        if (!consumeToolOnce(player)) {
+            return false;
+        }
         for (Pos p : plan.blocks()) {
             if (p.equals(pos)) {
                 continue;
             }
+            platform.requestBreak(handle, p);
+            if (config.hungerPerBlock > 0) {
+                player.causeFoodExhaustion(config.hungerPerBlock);
+            }
             if (!consumeToolOnce(player)) {
                 break;
             }
-            if (config.hungerPerBlock > 0) {
-                player.causeFoodExhaustion(config.hungerPerBlock);
-            }
-            platform.requestBreak(handle, p);
-        }
-        if (consumeToolOnce(player)) {
-            if (config.hungerPerBlock > 0) {
-                player.causeFoodExhaustion(config.hungerPerBlock);
-            }
-            platform.requestBreak(handle, pos);
         }
         return false;
     }
