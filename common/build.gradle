@@ -1,0 +1,13 @@
+// common：纯 Java 核心（零 Minecraft 依赖，可离线 javac 编译）
+plugins {
+    id 'java-library'
+}
+
+dependencies {
+    testImplementation platform('org.junit:junit-bom:5.11.0')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+}
+
+test {
+    useJUnitPlatform()
+}

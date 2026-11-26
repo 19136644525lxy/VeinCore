@@ -1,9 +1,9 @@
 # VeinCore
 
-> 一个为 Minecraft **1.21.1** 设计的三端（Fabric / Forge / NeoForge）连锁破坏模组。
+> 一个为 Minecraft **1.21.1** 设计的两端（Fabric / Forge）连锁破坏模组。
 > 零 Architectury 依赖 · **LGPL-3.0** · 无附魔 · **双模式指示器** · **轮廓预览** · **64–1280 自定义上限**
 
-当前状态：**规划中（v2.1 计划已批准）**，尚未开始编码。
+当前状态：**M0 工程骨架完成**（common 核心已实现并通过本地 `javac` 自测；Fabric / Forge 两端入口与 mods 元数据就位；Gradle 全量构建待联网环境验证）。
 
 ## 为什么做它
 
@@ -24,7 +24,6 @@ VeinCore 的目标：**默认保守不误挖、大矿脉不卡、配置可持久
 | Minecraft | 1.21.1 |
 | Fabric | Loader 0.16.x + Fabric API 0.102.x+1.21.1 |
 | Forge | 52.0.x |
-| NeoForge | 21.1.x |
 | Java | 21 |
 
 ## 核心特性（v2.1）
@@ -33,7 +32,7 @@ VeinCore 的目标：**默认保守不误挖、大矿脉不卡、配置可持久
 2. **双模式指示器**：准星右侧面板（图标 + 名称 + 状态）或纯文本模式；按下热键即可看到「预计挖掘数 / 冷却 / 授权状态 / 超过 600 格警告」。
 3. **轮廓预览渲染**：连锁前用白色线框预览将被挖的方块，开始挖掘后随方块逐个消失；带距离裁剪与截断保护。
 4. **自定义挖掘上限**：**64–1280 任意可设**（默认 64）；超过 **600 格**放行但警告「卡顿自负」，服务端可设置封顶。
-5. **6 种模式**：矿脉 / 连锁 / 隧道 1×1 / 隧道 3×3 / 斜向 / 平面；均可由玩家选（权限可限）。
+5. **7 种模式**：矿脉 / 连锁 / 3×3 小方块 / 隧道 1×1 / 隧道 3×3 / 斜向 / 平面；均可由玩家选（权限可限）。
 6. **独立权限组**：房主 / 服主 / 控制台默认可用且**不可取消**；其他玩家需显式授权；**玩家不能自授权，取消授权也只能由房主/服主/控制台执行**。
 7. **配置持久 + 数据包覆盖**：`config/veinminer/*.json` 原子写入，方块组可由数据包覆盖。
 8. **限流与掉落物合并**：每 tick 执行上限、冷却、全局预算，默认合并掉落物，专治卡顿。
@@ -82,9 +81,9 @@ VeinCore 的目标：**默认保守不误挖、大矿脉不卡、配置可持久
 
 | 里程碑 | 内容 | 状态 |
 |---|---|---|
-| M0 | 三端脚手架 + common remap 验证 | ⏳ 待开始 |
+| M0 | Fabric+Forge 脚手架 + common remap 验证 | ✅ 完成（javac 自测 50 项通过） |
 | M1 | 核心引擎（BFS/模式/限流/上限/预览扫描） | ⏳ 待开始 |
-| M2 | 三端事件 + 权限组/命令 | ⏳ 待开始 |
+| M2 | 两端事件 + 权限组/命令 | ⏳ 待开始 |
 | M3 | 配置/命令/数据包 | ⏳ 待开始 |
 | M4 | 客户端基础（热键/轮廓/HUD 骨架） | ⏳ 待开始 |
 | M5 | 指示器完善（GUI/文本双模式） | ⏳ 待开始 |
@@ -95,10 +94,25 @@ VeinCore 的目标：**默认保守不误挖、大矿脉不卡、配置可持久
 ```text
 fabric/       Fabric 适配（入口、事件、网络、HUD/轮廓渲染）
 forge/        Forge 适配
-neoforge/     NeoForge 适配
 common/       跨平台核心（引擎、模式、配置、权限、API、网络包）
 docs/PLAN.md  完整项目计划
 ```
+
+## 本地验证（无需 Gradle）
+
+```powershell
+$out = 'build/test-classes'
+New-Item -ItemType Directory -Force $out | Out-Null
+javac -encoding UTF-8 -d $out (Get-ChildItem -Recurse -Filter *.java common\src\main\java | ForEach-Object FullName)
+java -cp $out com.veincore.TestMain
+```
+
+预期输出 `ALL TESTS PASSED (50 checks)`。Gradle 全量构建（Loom / ForgeGradle）需联网下载依赖，留待联网环境验证。
+
+## 素材
+
+- 模式图标**复用 FTB Ultimine Indicator 的形状图标**（按原尺寸原字节复制、仅重命名，未修改像素），映射见 PLAN.md「图标与资源包」；预览见 `docs/assets/pattern_icon/preview.png`。
+- 参考项目为 LGPL-3.0；本项目同样以 LGPL-3.0 发布，复用来源与版权见仓库根 `NOTICE.md`。游戏内不显示来源提示。
 
 ## 仓库
 

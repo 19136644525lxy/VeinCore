@@ -1,0 +1,5 @@
+rootProject.name = 'VeinCore'
+
+include 'common'
+include 'fabric'
+include 'forge'

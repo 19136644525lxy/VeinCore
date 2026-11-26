@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "veincore",
+  "version": "${version}",
+  "name": "VeinCore",
+  "description": "FTB Ultimine 风格的连锁破坏，Fabric / Forge 两端独立实现，不依赖 Architectury API。",
+  "authors": ["VeinCore"],
+  "license": "LGPL-3.0",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["com.veincore.fabric.VeinCoreFabric"]
+  },
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "fabric-api": "*",
+    "minecraft": "~1.21.1",
+    "java": ">=21"
+  }
+}
