@@ -123,6 +123,21 @@ java -cp $out com.veincore.TestMain
 
 进游戏**按住 `~` 左键挖方块**即可连锁同种方块；按住 `~` + Shift + 滚轮切换模式；不按 `~` 时保持原版单块破坏。
 
+## 首轮实机测试清单（M6）
+
+1. **启动**：单人游戏装 jar → `/veinminer status` 应显示「已授权」；Fabric 服务端需 Fabric API，Forge 服务端需 52.0.x。
+2. **连锁**：按住 `~` 左键挖煤矿石 → 同组方块连锁；松开 `~` 挖单块。
+3. **模式切换**：按住 `~` + Shift + 滚轮 → actionbar 显示模式名；指示器同步。
+4. **指示器（GUI）**：准星右侧面板显示图标 + 名称 + 状态 + 格数；`/veinminer indicator mode text` 切纯文本。
+5. **轮廓**：按住 `~` 对准矿脉 → 白色线框预览；`/veinminer indicator outline off` 关闭。
+6. **上限**：`/veinminer settings maxblocks 64` → 最多 64；`1280` → 大矿脉警告；>600 提示「卡顿自负」。
+7. **耐久**：满耐久工具挖 64 格 → 扣 64 耐久；工具只剩 20 耐久挖 64 格 → 挖 20 格后停止。
+8. **饱食度**：`hunger_per_block` 默认 20（每格 5 点饥饿值）；改 0 关闭。
+9. **权限**：`/veinminer allow <player>` 后对方可用；`deny` 后不可用；非 owner 无权 allow。
+10. **数据包**：`data/<命名空间>/veinminer/<组名>.json` 覆盖方块组；`/veinminer reload` 生效。
+11. **Forge 端**：重复 1–10；重点确认 Mixin HUD（`Gui#render` 注入）不崩溃、轮廓正常。
+12. **已知限制**：Forge 端 HUD 依赖 Mixin（Forge 1.20.5+ 无 HUD 事件）；若启动崩溃，请上报 `logs/latest.log`。
+
 ## 素材
 
 - 模式图标**复用 FTB Ultimine Indicator 的形状图标**（按原尺寸原字节复制、仅重命名，未修改像素），映射见 PLAN.md「图标与资源包」；预览见 `docs/assets/pattern_icon/preview.png`。
