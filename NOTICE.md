@@ -1,6 +1,7 @@
 # NOTICE — 第三方素材
 
-本仓库 `docs/assets/pattern_icon/` 目录下的 7 个模式图标 PNG
+本仓库 `fabric/src/main/resources/assets/veincore/textures/pattern_icon/` 与
+`forge/src/main/resources/assets/veincore/textures/pattern_icon/` 目录下的 8 个模式图标 PNG
 （`vein.png`、`chain.png`、`square_3x3.png`、`tunnel_1x1.png`、`tunnel_3x3.png`、`diagonal.png`、`plane.png`、`unknown.png`）
 复制自：
 

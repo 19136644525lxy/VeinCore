@@ -102,8 +102,9 @@ VeinCore 的目标：**默认保守不误挖、大矿脉不卡、配置可持久
 fabric/       Fabric 适配（入口、事件、网络、HUD/轮廓渲染）
 forge/        Forge 适配
 common/       跨平台核心（引擎、模式、配置、权限、API、网络包）
-docs/PLAN.md  完整项目计划
 ```
+
+> 设计文档（PLAN 等）与图标预览只保留在本地，不随仓库发布。
 
 ## 本地验证（无需 Gradle）
 
@@ -143,7 +144,7 @@ java -cp $out com.veincore.TestMain
 
 ## 素材
 
-- 模式图标**复用 FTB Ultimine Indicator 的形状图标**（按原尺寸原字节复制、仅重命名，未修改像素），映射见 PLAN.md「图标与资源包」；预览见 `docs/assets/pattern_icon/preview.png`。
+- 模式图标**复用 FTB Ultimine Indicator 的形状图标**（按原尺寸原字节复制、仅重命名，未修改像素），位于两端 `assets/veincore/textures/pattern_icon/`；映射见本地设计文档（不随仓库发布）。
 - 参考项目为 LGPL-3.0；本项目同样以 LGPL-3.0 发布，复用来源与版权见仓库根 `NOTICE.md`。游戏内不显示来源提示。
 
 ## 仓库
