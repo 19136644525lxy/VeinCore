@@ -3,7 +3,7 @@
 > 一个为 Minecraft **1.21.1** 设计的两端（Fabric / Forge）连锁破坏模组。
 > 零 Architectury 依赖 · **LGPL-3.0** · 无附魔 · **双模式指示器** · **轮廓预览** · **64–1280 自定义上限**
 
-当前状态：**M0 工程骨架完成**（common 核心已实现并通过本地 `javac` 自测；Fabric / Forge 两端入口与 mods 元数据就位；Gradle 全量构建待联网环境验证）。
+当前状态：**M1 核心引擎完成（Fabric 端可试用）**。common 核心与 `:fabric:build` 均已通过；按住 `~` 用左键挖方块即可连锁同种方块（默认矿脉模式、上限读取服务端配置；预览/指示器与 Forge 事件接入分别在 M4/M2）。
 
 ## 为什么做它
 
@@ -82,7 +82,7 @@ VeinCore 的目标：**默认保守不误挖、大矿脉不卡、配置可持久
 | 里程碑 | 内容 | 状态 |
 |---|---|---|
 | M0 | Fabric+Forge 脚手架 + common remap 验证 | ✅ 完成（javac 自测 50 项通过） |
-| M1 | 核心引擎（BFS/模式/限流/上限/预览扫描） | ⏳ 待开始 |
+| M1 | 核心引擎（BFS/模式/限流/上限/预览扫描） | ✅ 完成（Fabric 事件链路接通：热键包→模式扫描→接管破坏；`javac` 50 项 + `:fabric:build` 通过；预览/指示器归 M4） |
 | M2 | 两端事件 + 权限组/命令 | ⏳ 待开始 |
 | M3 | 配置/命令/数据包 | ⏳ 待开始 |
 | M4 | 客户端基础（热键/轮廓/HUD 骨架） | ⏳ 待开始 |
@@ -107,7 +107,9 @@ javac -encoding UTF-8 -d $out (Get-ChildItem -Recurse -Filter *.java common\src\
 java -cp $out com.veincore.TestMain
 ```
 
-预期输出 `ALL TESTS PASSED (50 checks)`。Gradle 全量构建（Loom / ForgeGradle）需联网下载依赖，留待联网环境验证。
+预期输出 `ALL TESTS PASSED (50 checks)`。
+
+Fabric 实机试用：`.\gradlew.bat :fabric:build` 后，把 `fabric/build/libs/veincore-fabric-0.1.0.jar` 放进 `mods/`（需 Fabric API 0.102.x+1.21.1 + Java 21），进游戏**按住 `~` 左键挖方块**即可连锁同种方块；不按 `~` 时保持原版单块破坏。
 
 ## 素材
 

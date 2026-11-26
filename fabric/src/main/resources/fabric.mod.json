@@ -8,7 +8,8 @@
   "license": "LGPL-3.0",
   "environment": "*",
   "entrypoints": {
-    "main": ["com.veincore.fabric.VeinCoreFabric"]
+    "main": ["com.veincore.fabric.VeinCoreFabric"],
+    "client": ["com.veincore.fabric.client.VeinCoreFabricClient"]
   },
   "depends": {
     "fabricloader": ">=0.16.0",
