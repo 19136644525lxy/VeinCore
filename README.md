@@ -145,6 +145,7 @@ java -cp $out com.veincore.TestMain
 ## 素材
 
 - 模式图标**复用 FTB Ultimine Indicator 的形状图标**（按原尺寸原字节复制、仅重命名，未修改像素），位于两端 `assets/veincore/textures/pattern_icon/`；映射见本地设计文档（不随仓库发布）。
+- 图标通过 `assets/minecraft/atlases/blocks.json` 注入方块图集，客户端按 `TextureAtlasSprite` 渲染（1.21.1 与参考模组一致，避免直接绑定纹理的缩放/过滤问题）。
 - 参考项目为 LGPL-3.0；本项目同样以 LGPL-3.0 发布，复用来源与版权见仓库根 `NOTICE.md`。游戏内不显示来源提示。
 
 ## 仓库

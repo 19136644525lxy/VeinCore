@@ -1,0 +1,9 @@
+{
+  "sources": [
+    {
+      "type": "directory",
+      "source": "pattern_icon",
+      "prefix": "pattern_icon/"
+    }
+  ]
+}

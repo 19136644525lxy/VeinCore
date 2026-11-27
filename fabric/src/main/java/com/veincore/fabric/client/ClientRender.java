@@ -1,5 +1,6 @@
 package com.veincore.fabric.client;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.veincore.config.ClientConfig;
@@ -13,8 +14,11 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.texture.MissingTextureAtlasSprite;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.phys.Vec3;
 
 /** 客户端渲染（M4/M5）：世界轮廓线框 + HUD 指示器（GUI 面板 / 纯文本）。 */
@@ -67,11 +71,15 @@ public final class ClientRender {
         int panelWidth = iconSize + 6 + textWidth + 6;
         int panelHeight = Math.max(iconSize, 20) + 4;
         graphics.fill(x - 2, y - 2, x + panelWidth, y + panelHeight, 0x99000000);
-        int[] src = iconSize(p.pattern());
+        TextureAtlasSprite sp = iconSprite(p.pattern());
+        int sw = sp.contents().width();
+        int sh = sp.contents().height();
         int drawW = iconSize;
-        int drawH = Math.max(1, Math.round(iconSize * (float) src[1] / (float) src[0]));
+        int drawH = Math.max(1, Math.round(iconSize * (float) sh / (float) sw));
         int drawY = y + 2 + Math.max(0, (panelHeight - 4 - drawH) / 2);
-        graphics.blit(icon(p.pattern()), x + 2, drawY, 0f, 0f, drawW, drawH, src[0], src[1]);
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        graphics.blit(x + 2, drawY, 0, drawW, drawH, sp);
         int textX = x + iconSize + 6;
         graphics.drawString(mc.font, Component.literal(top), textX, y + 2, 0xFFFFFF, true);
         graphics.drawString(mc.font, Component.literal(bottom), textX, y + 11, statusColor, true);
@@ -159,14 +167,17 @@ public final class ClientRender {
             "plane", new int[]{17, 12},
             "unknown", new int[]{12, 17});
 
-    /** 图标资源：assets/veincore/textures/pattern_icon/<pattern>.png，缺失回退 unknown。 */
-    public static ResourceLocation icon(String pattern) {
+    /**
+     * atlas 中的图标 sprite：assets/veincore/textures/pattern_icon/<key>.png，
+     * 由 assets/minecraft/atlases/blocks.json 注入方块图集；缺失回退 unknown。
+     */
+    private static TextureAtlasSprite iconSprite(String pattern) {
+        var atlas = Minecraft.getInstance().getModelManager().getAtlas(InventoryMenu.BLOCK_ATLAS);
         String key = PatternId.byKey(pattern) == null ? "unknown" : PatternId.byKey(pattern).key;
-        return ResourceLocation.fromNamespaceAndPath("veincore", "textures/pattern_icon/" + key + ".png");
-    }
-
-    private static int[] iconSize(String pattern) {
-        PatternId id = PatternId.byKey(pattern);
-        return ICON_SIZES.getOrDefault(id == null ? "unknown" : id.key, new int[]{16, 16});
+        TextureAtlasSprite sprite = atlas.getSprite(ResourceLocation.fromNamespaceAndPath("veincore", "pattern_icon/" + key));
+        if (MissingTextureAtlasSprite.getLocation().equals(sprite.contents().name())) {
+            return atlas.getSprite(ResourceLocation.fromNamespaceAndPath("veincore", "pattern_icon/unknown"));
+        }
+        return sprite;
     }
 }
